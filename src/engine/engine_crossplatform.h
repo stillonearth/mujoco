@@ -39,10 +39,20 @@
 
   // non-Apple
   #else
-    #define mjQUICKSORT(buf, elnum, elsz, func, context) \
-        qsort_r(buf, elnum, elsz, func, context)
-    #define quicksortfunc(name, context, el1, el2) \
-        static int name(const void* el1, const void* el2, void* context)
+    // Emscripten
+    #ifdef __EMSCRIPTEN__
+      #include "sort_r.h"
+      #define mjQUICKSORT(buf, elnum, elsz, func, context) \
+        sort_r(buf, elnum, elsz, func, context)
+      #define quicksortfunc(name, context, el1, el2) \
+        static int name(const void *el1, const void *el2, void *context)
+    #else
+      // Other
+      #define mjQUICKSORT(buf, elnum, elsz, func, context) \
+          qsort_r(buf, elnum, elsz, func, context)
+      #define quicksortfunc(name, context, el1, el2) \
+          static int name(const void* el1, const void* el2, void* context)
+    #endif
   #endif
 #endif
 
