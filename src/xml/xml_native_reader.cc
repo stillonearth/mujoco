@@ -863,7 +863,10 @@ void mjXReader::Compiler(XMLElement* section, mjCModel* mod) {
     mod->fitaabb = (n==1);
   }
   if (MapValue(section, "coordinate", &n, coordinate_map, 2)) {
-    mod->global = (n==1);
+    if (n==1) {
+      throw mjXError(section, "global coordinates no longer supported. To convert existing models, "
+                              "load and save them in MuJoCo 2.3.3 or older");
+    }
   }
   if (MapValue(section, "angle", &n, angle_map, 2)) {
     mod->degree = (n==1);
@@ -1838,15 +1841,7 @@ void mjXReader::OneActuator(XMLElement* elem, mjCActuator* pact) {
   }
 
   else if (type == "plugin") {
-    pact->is_plugin = true;
-    ReadAttrTxt(elem, "plugin", pact->plugin_name);
-    ReadAttrTxt(elem, "instance", pact->plugin_instance_name);
-    if (pact->plugin_instance_name.empty()) {
-      pact->plugin_instance = model->AddPlugin();
-    } else {
-      model->hasImplicitPluginElem = true;
-    }
-    ReadPluginConfigs(elem, pact->plugin_instance);
+    OnePlugin(elem, pact);
   }
 
   else {          // SHOULD NOT OCCUR
@@ -2080,6 +2075,20 @@ void mjXReader::OneComposite(XMLElement* elem, mjCBody* pbody, mjCDef* def) {
   if (!res) {
     throw mjXError(elem, error);
   }
+}
+
+
+
+void mjXReader::OnePlugin(XMLElement* elem, mjCBase* object) {
+  object->is_plugin = true;
+  ReadAttrTxt(elem, "plugin", object->plugin_name);
+  ReadAttrTxt(elem, "instance", object->plugin_instance_name);
+  if (object->plugin_instance_name.empty()) {
+    object->plugin_instance = model->AddPlugin();
+  } else {
+    model->hasImplicitPluginElem = true;
+  }
+  ReadPluginConfigs(elem, object->plugin_instance);
 }
 
 
@@ -2696,15 +2705,7 @@ void mjXReader::Body(XMLElement* section, mjCBody* pbody) {
 
     // plugin sub-element
     else if (name == "plugin") {
-      pbody->is_plugin = true;
-      ReadAttrTxt(elem, "plugin", pbody->plugin_name);
-      ReadAttrTxt(elem, "instance", pbody->plugin_instance_name);
-      if (pbody->plugin_instance_name.empty()) {
-        pbody->plugin_instance = model->AddPlugin();
-      } else {
-        model->hasImplicitPluginElem = true;
-      }
-      ReadPluginConfigs(elem, pbody->plugin_instance);
+      OnePlugin(elem, pbody);
     }
 
     // composite sub-element

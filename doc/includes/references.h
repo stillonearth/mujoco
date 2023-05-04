@@ -607,13 +607,25 @@ struct mjLROpt_ {                 // options for mj_setLengthRange()
   mjtNum tolrange;                // convergence tolerance (relative to range)
 };
 typedef struct mjLROpt_ mjLROpt;
-struct mjVFS_ {                   // virtual file system for loading from memory
-  int   nfile;                    // number of files present
+struct mjVFS_ {                            // virtual file system for loading from memory
+  int   nfile;                             // number of files present
   char  filename[mjMAXVFS][mjMAXVFSNAME];  // file name without path
-  int   filesize[mjMAXVFS];       // file size in bytes
-  void* filedata[mjMAXVFS];       // buffer with file data
+  int   filesize[mjMAXVFS];                // file size in bytes
+  void* filedata[mjMAXVFS];                // buffer with file data
 };
 typedef struct mjVFS_ mjVFS;
+struct mjResource_ {
+  char* name;                     // name of resource (filename, etc)
+  void* data;                     // opaque data pointer
+  const void* provider_data;      // opaque resource provider data
+
+  // reading callback from resource provider
+  int (*read)(struct mjResource_* resource, const void** buffer);
+
+  // closing callback from resource provider
+  void (*close)(struct mjResource_* resource);
+};
+typedef struct mjResource_ mjResource;
 struct mjOption_ {                // physics options
   // timing parameters
   mjtNum timestep;                // timestep
@@ -661,7 +673,6 @@ struct mjVisual_ {                // visualization options
     float realtime;               // initial real-time factor (1: real time)
     int offwidth;                 // width of offscreen buffer
     int offheight;                // height of offscreen buffer
-    int treedepth;                // depth of the bounding volume hierarchy
     int ellipsoidinertia;         // geom for inertia visualization (0: box, 1: ellipsoid)
   } global;
 
@@ -1186,19 +1197,27 @@ struct mjModel_ {
   int*      names_map;            // internal hash map of names               (nnames_map x 1)
 };
 typedef struct mjModel_ mjModel;
+struct mjpResourceProvider_ {
+  const char* prefix;             // prefix for match against a resource name
+  mjfOpenResource open;           // opening callback
+  mjfReadResource read;           // reading callback
+  mjfCloseResource close;         // closing callback
+  void* data;                     // opaque data pointer (resource invariant)
+};
+typedef struct mjpResourceProvider_ mjpResourceProvider;
 typedef enum mjtPluginCapabilityBit_ {
-  mjPLUGIN_ACTUATOR = 1<<0,
-  mjPLUGIN_SENSOR   = 1<<1,
-  mjPLUGIN_PASSIVE  = 1<<2,
+  mjPLUGIN_ACTUATOR = 1<<0,       // actuator forces
+  mjPLUGIN_SENSOR   = 1<<1,       // sensor measurements
+  mjPLUGIN_PASSIVE  = 1<<2,       // passive forces
 } mjtPluginCapabilityBit;
 struct mjpPlugin_ {
-  const char* name;     // globally unique name identifying the plugin
+  const char* name;               // globally unique name identifying the plugin
 
   int nattribute;                 // number of configuration attributes
   const char* const* attributes;  // name of configuration attributes
 
-  int capabilityflags;  // bitfield of mjtPluginCapabilityBit specifying plugin capabilities
-  int needstage;        // an mjtStage enum value specifying the sensor computation stage
+  int capabilityflags;            // plugin capabilities: bitfield of mjtPluginCapabilityBit
+  int needstage;                  // sensor computation stage (mjtStage)
 
   // number of mjtNums needed to store the state of a plugin instance (required)
   int (*nstate)(const mjModel* m, int instance);
@@ -1225,7 +1244,7 @@ struct mjpPlugin_ {
   void (*advance)(const mjModel* m, mjData* d, int instance);
 
   // called by mjv_updateScene (optional)
-  void (*visualize)(const mjModel*m, mjData* d, mjvScene* scn, int instance);
+  void (*visualize)(const mjModel*m, mjData* d, const mjvOption* opt, mjvScene* scn, int instance);
 };
 typedef struct mjpPlugin_ mjpPlugin;
 typedef enum mjtGridPos_ {        // grid position for overlay
@@ -1759,6 +1778,7 @@ struct mjvOption_ {                  // abstract visualization options
   mjtByte  actuatorgroup[mjNGROUP];  // actuator visualization by group
   mjtByte  skingroup[mjNGROUP];      // skin visualization by group
   mjtByte  flags[mjNVISFLAG];        // visualization flags (indexed by mjtVisFlag)
+  int bvh_depth;                     // depth of the bounding volume hierarchy to be visualized
 };
 typedef struct mjvOption_ mjvOption;
 struct mjvScene_ {                // abstract scene passed to OpenGL renderer
@@ -1845,6 +1865,219 @@ struct mjvFigure_ {               // abstract 2D figure passed to OpenGL rendere
   float   yaxisdata[2];           // range of y-axis in data units
 };
 typedef struct mjvFigure_ mjvFigure;
+struct mjvSceneState_ {
+  int nbuffer;                     // size of the buffer in bytes
+  void* buffer;                    // heap-allocated memory for all arrays in this struct
+  int maxgeom;                     // maximum number of mjvGeom supported by this state object
+  mjvScene plugincache;            // scratch space for vis geoms inserted by plugins
+
+  // fields in mjModel that are necessary to re-render a scene
+  struct {
+    int nu;
+    int na;
+    int nbody;
+    int nbvh;
+    int njnt;
+    int ngeom;
+    int nsite;
+    int ncam;
+    int nlight;
+    int nmesh;
+    int nskin;
+    int nskinvert;
+    int nskinface;
+    int nskinbone;
+    int nskinbonevert;
+    int nmat;
+    int neq;
+    int ntendon;
+    int nwrap;
+    int nsensor;
+    int nnames;
+    int nsensordata;
+
+    mjOption opt;
+    mjVisual vis;
+    mjStatistic stat;
+
+    int* body_parentid;
+    int* body_rootid;
+    int* body_weldid;
+    int* body_mocapid;
+    int* body_jntnum;
+    int* body_jntadr;
+    int* body_geomnum;
+    int* body_geomadr;
+    mjtNum* body_iquat;
+    mjtNum* body_mass;
+    mjtNum* body_inertia;
+    int* body_bvhadr;
+    int* body_bvhnum;
+
+    int* bvh_depth;
+    int* bvh_child;
+    int* bvh_geomid;
+    mjtNum* bvh_aabb;
+
+    int* jnt_type;
+    int* jnt_bodyid;
+    int* jnt_group;
+
+    int* geom_type;
+    int* geom_bodyid;
+    int* geom_dataid;
+    int* geom_matid;
+    int* geom_group;
+    mjtNum* geom_size;
+    mjtNum* geom_aabb;
+    mjtNum* geom_rbound;
+    float* geom_rgba;
+
+    int* site_type;
+    int* site_bodyid;
+    int* site_matid;
+    int* site_group;
+    mjtNum* site_size;
+    float* site_rgba;
+
+    mjtNum* cam_fovy;
+    mjtNum* cam_ipd;
+
+    mjtByte* light_directional;
+    mjtByte* light_castshadow;
+    mjtByte* light_active;
+    float* light_attenuation;
+    float* light_cutoff;
+    float* light_exponent;
+    float* light_ambient;
+    float* light_diffuse;
+    float* light_specular;
+
+    int* mesh_texcoordadr;
+    int* mesh_graphadr;
+
+    int* skin_matid;
+    int* skin_group;
+    float* skin_rgba;
+    float* skin_inflate;
+    int* skin_vertadr;
+    int* skin_vertnum;
+    int* skin_texcoordadr;
+    int* skin_faceadr;
+    int* skin_facenum;
+    int* skin_boneadr;
+    int* skin_bonenum;
+    float* skin_vert;
+    int* skin_face;
+    int* skin_bonevertadr;
+    int* skin_bonevertnum;
+    float* skin_bonebindpos;
+    float* skin_bonebindquat;
+    int* skin_bonebodyid;
+    int* skin_bonevertid;
+    float* skin_bonevertweight;
+
+    int* mat_texid;
+    mjtByte* mat_texuniform;
+    float* mat_texrepeat;
+    float* mat_emission;
+    float* mat_specular;
+    float* mat_shininess;
+    float* mat_reflectance;
+    float* mat_rgba;
+
+    int* eq_type;
+    int* eq_obj1id;
+    int* eq_obj2id;
+    mjtByte* eq_active;
+    mjtNum* eq_data;
+
+    int* tendon_num;
+    int* tendon_matid;
+    int* tendon_group;
+    mjtByte* tendon_limited;
+    mjtNum* tendon_width;
+    mjtNum* tendon_range;
+    mjtNum* tendon_stiffness;
+    mjtNum* tendon_damping;
+    mjtNum* tendon_frictionloss;
+    mjtNum* tendon_lengthspring;
+    float* tendon_rgba;
+
+    int* actuator_trntype;
+    int* actuator_dyntype;
+    int* actuator_trnid;
+    int* actuator_actadr;
+    int* actuator_actnum;
+    int* actuator_group;
+    mjtByte* actuator_ctrllimited;
+    mjtByte* actuator_actlimited;
+    mjtNum* actuator_ctrlrange;
+    mjtNum* actuator_actrange;
+    mjtNum* actuator_cranklength;
+
+    int* sensor_type;
+    int* sensor_objid;
+    int* sensor_adr;
+
+    int* name_bodyadr;
+    int* name_jntadr;
+    int* name_geomadr;
+    int* name_siteadr;
+    int* name_camadr;
+    int* name_lightadr;
+    int* name_eqadr;
+    int* name_tendonadr;
+    int* name_actuatoradr;
+    char* names;
+  } model;
+
+  // fields in mjData that are necessary to re-render a scene
+  struct {
+    mjWarningStat warning[mjNWARNING];
+
+    int nefc;
+    int ncon;
+
+    mjtNum time;
+
+    mjtNum* act;
+
+    mjtNum* ctrl;
+    mjtNum* xfrc_applied;
+
+    mjtNum* sensordata;
+
+    mjtNum* xpos;
+    mjtNum* xquat;
+    mjtNum* xmat;
+    mjtNum* xipos;
+    mjtNum* ximat;
+    mjtNum* xanchor;
+    mjtNum* xaxis;
+    mjtNum* geom_xpos;
+    mjtNum* geom_xmat;
+    mjtNum* site_xpos;
+    mjtNum* site_xmat;
+    mjtNum* cam_xpos;
+    mjtNum* cam_xmat;
+    mjtNum* light_xpos;
+    mjtNum* light_xdir;
+
+    mjtNum* subtree_com;
+
+    int* ten_wrapadr;
+    int* ten_wrapnum;
+    int* wrap_obj;
+    mjtNum* wrap_xpos;
+
+    mjtByte* bvh_active;
+
+    mjContact* contact;
+    mjtNum* efc_force;
+  } data;
+};
+typedef struct mjvSceneState_ mjvSceneState;
 
 //----------------------------- MJAPI FUNCTIONS --------------------------------
 void mj_defaultVFS(mjVFS* vfs);
@@ -2000,8 +2233,14 @@ mjtNum mjv_frustumHeight(const mjvScene* scn);
 void mjv_alignToCamera(mjtNum res[3], const mjtNum vec[3], const mjtNum forward[3]);
 void mjv_moveCamera(const mjModel* m, int action, mjtNum reldx, mjtNum reldy,
                     const mjvScene* scn, mjvCamera* cam);
+void mjv_moveCameraFromState(const mjvSceneState* scnstate, int action,
+                             mjtNum reldx, mjtNum reldy,
+                             const mjvScene* scn, mjvCamera* cam);
 void mjv_movePerturb(const mjModel* m, const mjData* d, int action, mjtNum reldx,
                      mjtNum reldy, const mjvScene* scn, mjvPerturb* pert);
+void mjv_movePerturbFromState(const mjvSceneState* scnstate, int action,
+                              mjtNum reldx, mjtNum reldy,
+                              const mjvScene* scn, mjvPerturb* pert);
 void mjv_moveModel(const mjModel* m, int action, mjtNum reldx, mjtNum reldy,
                    const mjtNum roomup[3], mjvScene* scn);
 void mjv_initPerturb(const mjModel* m, mjData* d, const mjvScene* scn, mjvPerturb* pert);
@@ -2024,6 +2263,15 @@ void mjv_makeScene(const mjModel* m, mjvScene* scn, int maxgeom);
 void mjv_freeScene(mjvScene* scn);
 void mjv_updateScene(const mjModel* m, mjData* d, const mjvOption* opt,
                      const mjvPerturb* pert, mjvCamera* cam, int catmask, mjvScene* scn);
+int mjv_updateSceneFromState(const mjvSceneState* scnstate, const mjvOption* opt,
+                             const mjvPerturb* pert, mjvCamera* cam, int catmask,
+                             mjvScene* scn);
+void mjv_defaultSceneState(mjvSceneState* scnstate);
+void mjv_makeSceneState(const mjModel* m, const mjData* d,
+                        mjvSceneState* scnstate, int maxgeom);
+void mjv_freeSceneState(mjvSceneState* scnstate);
+void mjv_updateSceneState(const mjModel* m, mjData* d, const mjvOption* opt,
+                          mjvSceneState* scnstate);
 void mjv_addGeoms(const mjModel* m, mjData* d, const mjvOption* opt,
                   const mjvPerturb* pert, int catmask, mjvScene* scn);
 void mjv_makeLights(const mjModel* m, mjData* d, mjvScene* scn);
@@ -2034,6 +2282,7 @@ void mjr_makeContext(const mjModel* m, mjrContext* con, int fontscale);
 void mjr_changeFont(int fontscale, mjrContext* con);
 void mjr_addAux(int index, int width, int height, int samples, mjrContext* con);
 void mjr_freeContext(mjrContext* con);
+void mjr_resizeOffscreen(int width, int height, mjrContext* con);
 void mjr_uploadTexture(const mjModel* m, const mjrContext* con, int texid);
 void mjr_uploadMesh(const mjModel* m, const mjrContext* con, int meshid);
 void mjr_uploadHField(const mjModel* m, const mjrContext* con, int hfieldid);
@@ -2197,4 +2446,9 @@ int mjp_registerPlugin(const mjpPlugin* plugin);
 int mjp_pluginCount();
 const mjpPlugin* mjp_getPlugin(const char* name, int* slot);
 const mjpPlugin* mjp_getPluginAtSlot(int slot);
+void mjp_defaultResourceProvider(mjpResourceProvider* provider);
+int mjp_registerResourceProvider(const mjpResourceProvider* provider);
+int mjp_resourceProviderCount();
+const mjpResourceProvider* mjp_getResourceProvider(const char* resource_name);
+const mjpResourceProvider* mjp_getResourceProviderAtSlot(int slot);
 // NOLINTEND

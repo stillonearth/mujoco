@@ -254,11 +254,11 @@ void Cable::Compute(const mjModel* m, mjData* d, int instance) {
 
 void Cable::Visualize(const mjModel* m, mjData* d, mjvScene* scn,
                       int instance) {
-if(!vmax) {
-  return;
-}
+  if (!vmax) {
+    return;
+  }
 
-for (int b = 0; b < n; b++)  {
+  for (int b = 0; b < n; b++)  {
     int i = i0 + b;
     int bn = b + next[b];
 
@@ -302,11 +302,11 @@ return 0;
         auto* elasticity = reinterpret_cast<Cable*>(d->plugin_data[instance]);
         elasticity->Compute(m, d, instance);
       };
-  plugin.visualize =
-      +[](const mjModel* m, mjData* d, mjvScene* scn, int instance) {
-        auto* elasticity = reinterpret_cast<Cable*>(d->plugin_data[instance]);
-        elasticity->Visualize(m, d, scn, instance);
-      };
+  plugin.visualize = +[](const mjModel* m, mjData* d, const mjvOption* opt, mjvScene* scn,
+                         int instance) {
+    auto* elasticity = reinterpret_cast<Cable*>(d->plugin_data[instance]);
+    elasticity->Visualize(m, d, scn, instance);
+  };
 
   mjp_registerPlugin(&plugin);
 }

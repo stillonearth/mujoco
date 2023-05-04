@@ -113,6 +113,27 @@ class mjCAlternative {
 };
 
 
+// bounding volume hierarchy
+class mjCBoundingVolumeHierarchy {
+ public:
+  mjCBoundingVolumeHierarchy();
+
+  int nbvh;
+  std::vector<mjtNum> bvh;            // bounding boxes                                (nbvh x 6)
+  std::vector<int> child;             // children of each node                         (nbvh x 2)
+  std::vector<int> nodeid;            // id of the geom contained by the node          (nbvh x 1)
+  std::vector<int> level;             // levels of each node                           (nbvh x 1)
+
+  int MakeBVH(std::vector<mjCGeom *>&, int lev = 0);  // make bounding volume hierarchy
+  void Set(mjtNum ipos_element[3], mjtNum iquat_element[4]);
+
+ private:
+  std::string name_;
+  double ipos_[3];
+  double iquat_[4];
+};
+
+
 
 //------------------------- class mjCBase ----------------------------------------------------------
 // Generic functionality for all derived classes
@@ -122,6 +143,9 @@ class mjCBase {
   friend class mjCDef;
 
  public:
+  // load resource if found (fallback to OS filesystem)
+  mjResource* LoadResource(std::string filename, int provider);
+
   std::string name;               // object name
   std::string classname;          // defaults class name
   int id;                         // object id
@@ -212,14 +236,7 @@ class mjCBody : public mjCBase {
   int lastdof;                    // id of last dof
   int subtreedofs;                // number of dofs in subtree, including self
 
-  int MakeBVH(std::vector<mjCGeom *>&, int lev);  // make bounding volume hierarchy
-
-  int nbvh;
-  std::vector<mjtNum> bvh;            // bounding volume hierarchy
-  std::vector<int> child;             // children of bvh nodes
-  std::vector<int> nodeid;            // id of the geom contained by the node
-  std::vector<int> level;             // levels of bvh
-
+  mjCBoundingVolumeHierarchy tree;  // bounding volume hierarchy
 
   // objects allocated by Add functions
   std::vector<mjCBody*>    bodies;     // child bodies
@@ -291,6 +308,7 @@ class mjCGeom : public mjCBase {
   friend class mjCModel;
   friend class mjXWriter;
   friend class mjXURDF;
+  friend class mjCBoundingVolumeHierarchy;
 
  public:
   double GetVolume(void);             // compute geom volume
@@ -496,10 +514,10 @@ class mjCMesh: public mjCBase {
  private:
   mjCMesh(mjCModel* = 0, mjCDef* = 0);        // constructor
   ~mjCMesh();                                 // destructor
-  void Compile(const mjVFS* vfs);             // compiler
-  void LoadOBJ(const mjVFS* vfs);             // load mesh in wavefront OBJ format
-  void LoadSTL(const mjVFS* vfs);             // load mesh in STL BIN format
-  void LoadMSH(const mjVFS* vfs);             // load mesh in MSH BIN format
+  void Compile(int default_provider);         // compiler
+  void LoadOBJ(mjResource* resource);         // load mesh in wavefront OBJ format
+  void LoadSTL(mjResource* resource);         // load mesh in STL BIN format
+  void LoadMSH(mjResource* resource);         // load mesh in MSH BIN format
   void MakeGraph(void);                       // make graph of convex hull
   void CopyGraph(void);                       // copy graph into face data
   void MakeNormal(void);                      // compute vertex normals
@@ -507,10 +525,14 @@ class mjCMesh: public mjCBase {
   void RemoveRepeated(void);                  // remove repeated vertices
   void CheckMesh(void);                       // check if the mesh is valid
 
+  // compute the volume and center-of-mass of the mesh given the face center
+  void ComputeVolume(double CoM[3], mjtMeshType type, const double facecen[3],
+                     bool exactmeshinertia);
+
   // mesh properties that indicate a well-formed mesh
   std::pair<int, int> invalidorientation;     // indices of invalid edge; -1 if none
   bool validarea;                             // false if the area is too small
-  bool validvolume;                           // false if the volume is too small
+  int validvolume;                            // 0: volume is too small, -1: volume is negative
   bool valideigenvalue;                       // false if inertia eigenvalue is too small
   bool validinequality;                       // false if inertia inequality is not satisfied
   bool processed;                             // false if the mesh has not been processed yet
@@ -574,8 +596,8 @@ class mjCSkin: public mjCBase {
  private:
   mjCSkin(mjCModel* = 0);                     // constructor
   ~mjCSkin();                                 // destructor
-  void Compile(const mjVFS* vfs);             // compiler
-  void LoadSKN(const mjVFS* vfs);             // load skin in SKN BIN format
+  void Compile(int default_provider);         // compiler
+  void LoadSKN(mjResource* resource);         // load skin in SKN BIN format
 
   int matid;                          // material id
   std::vector<int> bodyid;            // body ids
@@ -600,10 +622,10 @@ class mjCHField : public mjCBase {
  private:
   mjCHField(mjCModel* model);             // constructor
   ~mjCHField();                           // destructor
-  void Compile(const mjVFS* vfs);         // compiler
+  void Compile(int default_provider);     // compiler
 
-  void LoadCustom(std::string filename, const mjVFS* vfs); // load from custom format
-  void LoadPNG(std::string filename, const mjVFS* vfs);    // load from PNG format
+  void LoadCustom(mjResource* resource);  // load from custom format
+  void LoadPNG(mjResource* resource);     // load from PNG format
 };
 
 
@@ -644,22 +666,22 @@ class mjCTexture : public mjCBase {
  private:
   mjCTexture(mjCModel*);                  // constructor
   ~mjCTexture();                          // destructior
-  void Compile(const mjVFS* vfs);         // compiler
+  void Compile(int default_provider);     // compiler
 
   void Builtin2D(void);                   // make builtin 2D
   void BuiltinCube(void);                 // make builtin cube
-  void Load2D(std::string filename, const mjVFS* vfs);         // load 2D from file
-  void LoadCubeSingle(std::string filename, const mjVFS* vfs); // load cube from single file
-  void LoadCubeSeparate(const mjVFS* vfs);                     // load cube from separate files
+  void Load2D(std::string filename, int default_provider);         // load 2D from file
+  void LoadCubeSingle(std::string filename, int default_provider); // load cube from single file
+  void LoadCubeSeparate(int default_provider);                     // load cube from separate files
 
-  void LoadFlip(std::string filename, const mjVFS* vfs,   // load and flip
+  void LoadFlip(std::string filename, int default_provider,   // load and flip
                 std::vector<unsigned char>& image,
                 unsigned int& w, unsigned int& h);
 
-  void LoadPNG(std::string filename, const mjVFS* vfs,
+  void LoadPNG(mjResource* resource,
                std::vector<unsigned char>& image,
                unsigned int& w, unsigned int& h);
-  void LoadCustom(std::string filename, const mjVFS* vfs,
+  void LoadCustom(mjResource* resource,
                   std::vector<unsigned char>& image,
                   unsigned int& w, unsigned int& h);
 
@@ -688,8 +710,8 @@ class mjCMaterial : public mjCBase {
   float rgba[4];                  // rgba
 
  private:
-  mjCMaterial(mjCModel* = 0, mjCDef* = 0);// constructor
-  void Compile(void);                     // compiler
+  mjCMaterial(mjCModel* = 0, mjCDef* = 0);  // constructor
+  void Compile(void);                       // compiler
 
   int texid;                      // id of material
 };
@@ -722,8 +744,8 @@ class mjCPair : public mjCBase {
   }
 
  private:
-  mjCPair(mjCModel* = 0, mjCDef* = 0);// constructor
-  void Compile(void);                 // compiler
+  mjCPair(mjCModel* = 0, mjCDef* = 0);  // constructor
+  void Compile(void);                   // compiler
 
   int geom1;                      // id of geom1
   int geom2;                      // id of geom2
@@ -808,22 +830,22 @@ class mjCTendon : public mjCBase {
   mjCWrap* GetWrap(int);                      // pointer to wrap
 
   // variables set by user
-  int group;                      // group for visualization
-  std::string material;           // name of material for rendering
-  int limited;                    // does tendon have limits: 0 false, 1 true, 2 auto
-  double width;                   // width for rendering
-  mjtNum solref_limit[mjNREF];    // solver reference: tendon limits
-  mjtNum solimp_limit[mjNIMP];    // solver impedance: tendon limits
-  mjtNum solref_friction[mjNREF]; // solver reference: tendon friction
-  mjtNum solimp_friction[mjNIMP]; // solver impedance: tendon friction
-  double range[2];                // length limits
-  double margin;                  // margin value for tendon limit detection
-  double stiffness;               // stiffness coefficient
-  double damping;                 // damping coefficient
-  double frictionloss;            // friction loss
-  double springlength[2];         // spring resting length; {-1, -1}: use qpos_spring
-  std::vector<double> userdata;   // user data
-  float rgba[4];                  // rgba when material is omitted
+  int group;                       // group for visualization
+  std::string material;            // name of material for rendering
+  int limited;                     // does tendon have limits: 0 false, 1 true, 2 auto
+  double width;                    // width for rendering
+  mjtNum solref_limit[mjNREF];     // solver reference: tendon limits
+  mjtNum solimp_limit[mjNIMP];     // solver impedance: tendon limits
+  mjtNum solref_friction[mjNREF];  // solver reference: tendon friction
+  mjtNum solimp_friction[mjNIMP];  // solver impedance: tendon friction
+  double range[2];                 // length limits
+  double margin;                   // margin value for tendon limit detection
+  double stiffness;                // stiffness coefficient
+  double damping;                  // damping coefficient
+  double frictionloss;             // friction loss
+  double springlength[2];          // spring resting length; {-1, -1}: use qpos_spring
+  std::vector<double> userdata;    // user data
+  float rgba[4];                   // rgba when material is omitted
 
  private:
   mjCTendon(mjCModel* = 0, mjCDef* = 0);      // constructor
@@ -913,15 +935,9 @@ class mjCActuator : public mjCBase {
   std::string slidersite;         // site defining cylinder, for slider-crank only
   std::string refsite;            // reference site, for site transmission only
 
-  // plugin support
-  bool is_plugin;
-  std::string plugin_name;
-  std::string plugin_instance_name;
-  mjCPlugin* plugin_instance;
-
  private:
-  mjCActuator(mjCModel* = 0, mjCDef* = 0);// constructor
-  void Compile(void);                     // compiler
+  mjCActuator(mjCModel* = 0, mjCDef* = 0);  // constructor
+  void Compile(void);                       // compiler
 
   int trnid[2];                   // id of transmission target
 };
@@ -1032,18 +1048,18 @@ class mjCKey : public mjCBase {
   friend class mjXWriter;
 
  public:
-  double time;                    // time
-  std::vector<double> qpos;       // qpos
-  std::vector<double> qvel;       // qvel
-  std::vector<double> act;        // act
-  std::vector<double> mpos;       // mocap pos
-  std::vector<double> mquat;      // mocap quat
-  std::vector<double> ctrl;       // ctrl
+  double time;                     // time
+  std::vector<double> qpos;        // qpos
+  std::vector<double> qvel;        // qvel
+  std::vector<double> act;         // act
+  std::vector<double> mpos;        // mocap pos
+  std::vector<double> mquat;       // mocap quat
+  std::vector<double> ctrl;        // ctrl
 
  private:
-  mjCKey(mjCModel*);              // constructor
-  ~mjCKey();                      // destructor
-  void Compile(const mjModel* m); // compiler
+  mjCKey(mjCModel*);               // constructor
+  ~mjCKey();                       // destructor
+  void Compile(const mjModel* m);  // compiler
 };
 
 

@@ -244,8 +244,6 @@ Next we provide a more elaborate example illustrating several features of MJCF.
 .. code:: xml
 
    <mujoco model="example">
-     <compiler coordinate="global"/>
-
      <default>
        <geom rgba=".8 .6 .4 1"/>
      </default>
@@ -256,25 +254,26 @@ Next we provide a more elaborate example illustrating several features of MJCF.
 
      <worldbody>
        <light pos="0 1 1" dir="0 -1 -1" diffuse="1 1 1"/>
-       <body>
-         <geom type="capsule" fromto="0 0 1  0 0 0.6" size="0.06"/>
-         <joint type="ball" pos="0 0 1"/>
-         <body>
-           <geom type="capsule" fromto="0 0 0.6  0.3 0 0.6" size="0.04"/>
-           <joint type="hinge" pos="0 0 0.6" axis="0 1 0"/>
-           <joint type="hinge" pos="0 0 0.6" axis="1 0 0"/>
-           <body>
-             <geom type="ellipsoid" pos="0.4 0 0.6" size="0.1 0.08 0.02"/>
-             <site name="end1" pos="0.5 0 0.6" type="sphere" size="0.01"/>
-             <joint type="hinge" pos="0.3 0 0.6" axis="0 1 0"/>
-             <joint type="hinge" pos="0.3 0 0.6" axis="0 0 1"/>
+       <body pos="0 0 1">
+         <joint type="ball"/>
+         <geom type="capsule" size="0.06" fromto="0 0 0  0 0 -.4"/>
+         <body pos="0 0 -0.4">
+           <joint axis="0 1 0"/>
+           <joint axis="1 0 0"/>
+           <geom type="capsule" size="0.04" fromto="0 0 0  .3 0 0"/>
+           <body pos=".3 0 0">
+             <joint axis="0 1 0"/>
+             <joint axis="0 0 1"/>
+             <geom pos=".1 0 0" size="0.1 0.08 0.02" type="ellipsoid"/>
+             <site name="end1" pos="0.2 0 0" size="0.01"/>
            </body>
          </body>
        </body>
-       <body>
-         <geom type="cylinder" fromto="0.5 0 0.2  0.5 0 0" size="0.07"/>
-         <site name="end2" pos="0.5 0 0.2" type="sphere" size="0.01"/>
+
+       <body pos="0.3 0 0.1">
          <joint type="free"/>
+         <geom size="0.07 0.1" type="cylinder"/>
+         <site name="end2" pos="0 0 0.1" size="0.01"/>
        </body>
      </worldbody>
 
@@ -612,13 +611,13 @@ away and cause divergence.
 
 .. _Units:
 
-Units are undefined
-~~~~~~~~~~~~~~~~~~~
+Units are unspecified
+~~~~~~~~~~~~~~~~~~~~~
 
-In MuJoCo basic physical units are undefined. The user may interpret the system of units as they choose, as long as it
-is consistent. To understand this, consider an example: the dynamics of a 1 Meter spaceship that weighs 1 Kg and has a 1
-Newton thruster are the same as those of a 1 cm spaceship that weighs 1 gram and has a 1 dyn thruster. This is because
-both `MKS <https://en.wikipedia.org/wiki/MKS_system_of_units>`__ and `CGS
+MuJoCo does not specify basic physical units. The user may interpret the system of units as they choose, as long as it
+is consistent. To understand this, consider an example: the dynamics of a 1 meter spaceship that weighs 1 kilogram and
+has a 1 Newton thruster are the same as those of a 1 cm spaceship that weighs 1 gram and has a 1 dyn thruster. This is
+because both `MKS <https://en.wikipedia.org/wiki/MKS_system_of_units>`__ and `CGS
 <https://en.wikipedia.org/wiki/Centimetre%E2%80%93gram%E2%80%93second_system_of_units>`__ are consistent systems of
 units. This property allows the user to scale their model as they choose, which is useful when simulating very small or
 very large things, to improve the numerical properties of the simulation.
@@ -626,7 +625,7 @@ very large things, to improve the numerical properties of the simulation.
 That said, users are encouraged to use MKS, as there are two places where MuJoCo uses MKS-like default values:
 
 - The default value of :ref:`gravity<option>` is (0, 0, -9.81), which corresponds to Earth surface gravity in MKS.
-  Note that this does not really define system of units to be MKS, since we might be using CGS on
+  Note that this does not really specify the MKS system of units, since we might be using CGS on
   `Enceladus <https://en.wikipedia.org/wiki/Enceladus>`__.
 - The default value of :ref:`geom density<body-geom>` (used to infer body masses and inertias) is 1000, which
   corresponds to the density of water in MKS.
@@ -636,9 +635,9 @@ in `Dimensional Analysis <https://en.wikipedia.org/wiki/Dimensional_analysis>`__
 interpreted as MKS, then forces and torques are in Newton and Newton-Meter, respectively.
 
 **Angles:** Although angles can be specified using degrees in MJCF (and indeed degrees are the
-:ref:`default <compiler>`), internally all angles are `Radians <https://en.wikipedia.org/wiki/Radian>`__. So e.g., if we
-are using MKS, angular velocities reported by :ref:`gyroscopes<sensor-gyro>` would be in rad/s while stiffness of hinge
-joints would be in Nm/rad.
+:ref:`default <compiler>`), all angular quantities :ref:`mjModel` and :ref:`mjData` are expressed in
+`radians <https://en.wikipedia.org/wiki/Radian>`__. So, for example, if we are using MKS, angular velocities reported by
+:ref:`gyroscopes<sensor-gyro>` would be in rad/s while stiffness of hinge joints would be in Nm/rad.
 
 
 .. _SurprisingCollisions:

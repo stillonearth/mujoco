@@ -369,13 +369,29 @@ typedef struct mjLROpt_ mjLROpt;
 
 //---------------------------------- mjVFS ---------------------------------------------------------
 
-struct mjVFS_ {                   // virtual file system for loading from memory
-  int   nfile;                    // number of files present
+struct mjVFS_ {                            // virtual file system for loading from memory
+  int   nfile;                             // number of files present
   char  filename[mjMAXVFS][mjMAXVFSNAME];  // file name without path
-  int   filesize[mjMAXVFS];       // file size in bytes
-  void* filedata[mjMAXVFS];       // buffer with file data
+  int   filesize[mjMAXVFS];                // file size in bytes
+  void* filedata[mjMAXVFS];                // buffer with file data
 };
 typedef struct mjVFS_ mjVFS;
+
+
+//---------------------------------- mjResource ----------------------------------------------------
+
+struct mjResource_ {
+  char* name;                     // name of resource (filename, etc)
+  void* data;                     // opaque data pointer
+  const void* provider_data;      // opaque resource provider data
+
+  // reading callback from resource provider
+  int (*read)(struct mjResource_* resource, const void** buffer);
+
+  // closing callback from resource provider
+  void (*close)(struct mjResource_* resource);
+};
+typedef struct mjResource_ mjResource;
 
 
 //---------------------------------- mjOption ------------------------------------------------------
@@ -431,7 +447,6 @@ struct mjVisual_ {                // visualization options
     float realtime;               // initial real-time factor (1: real time)
     int offwidth;                 // width of offscreen buffer
     int offheight;                // height of offscreen buffer
-    int treedepth;                // depth of the bounding volume hierarchy
     int ellipsoidinertia;         // geom for inertia visualization (0: box, 1: ellipsoid)
   } global;
 

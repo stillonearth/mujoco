@@ -191,11 +191,11 @@ any effect. The settings here are global and apply to the entire model.
 
 .. _compiler-coordinate:
 
-:at:`coordinate`: :at-val:`[local, global], "local" for MJCF, always "local" for URDF`
-   This attribute specifies whether the frame positions and orientations in the MJCF model are expressed in local or
-   global coordinates; recall :ref:`Coordinate frames <CFrame>`. The compiler converts global into local
-   coordinates, and mjModel always uses local coordinates. For URDF models the parser sets this attribute to "local"
-   internally, regardless of the XML setting.
+:at:`coordinate`: :at-val:`[local, global], "local"`
+   In previous versions, this attribute could be used to specify whether frame positions and orientations are expressed
+   in local or global coordinates, but the "global" option has since been removed, and will cause an error to be
+   generated. In order to convert older models which used the "global" option, load and save them in MuJoCo 2.3.3 or
+   older.
 
 .. _compiler-angle:
 
@@ -491,7 +491,7 @@ adjust it properly through the XML.
    damping in the joints implicitly – which improves stability and accuracy. It does not presently do this with body
    viscosity. Therefore, if the goal is merely to create a damped simulation (as opposed to modeling the specific
    effects of viscosity), we recommend using joint damping rather than body viscosity, or switching to the
-   :at:`implicit` integrator.
+   :at:`implicit` or :at:`implicitfast` integrators.
 
 .. _option-o_margin:
 
@@ -511,10 +511,11 @@ adjust it properly through the XML.
 
 .. _option-integrator:
 
-:at:`integrator`: :at-val:`[Euler, RK4, implicit], "Euler"`
+:at:`integrator`: :at-val:`[Euler, RK4, implicit, implicitfast], "Euler"`
    This attribute selects the numerical :ref:`integrator <geIntegration>` to be used. Currently the available
-   integrators are the semi-implicit Euler method, the fixed-step 4-th order Runge Kutta method, and
-   the Implicit-in-velocity Euler method.
+   integrators are the semi-implicit Euler method, the fixed-step 4-th order Runge Kutta method, the
+   Implicit-in-velocity Euler method, and :at:`implicitfast`, which drops the Coriolis and centrifugal terms. See
+   :ref:`Numerical Integration<geIntegration>` for more details.
 
 .. _option-collision:
 
@@ -2170,7 +2171,7 @@ chapter.
 .. _asset-texture-gridlayout:
 
 :at:`gridlayout`: :at-val:`string, "............"`
-   .. figure:: images/modeling/skybox.png
+   .. figure:: images/XMLreference/skybox.png
       :width: 250px
       :align: right
 
@@ -2356,7 +2357,7 @@ also known as terrain map, is a 2D matrix of elevation data. The data can be spe
 .. _asset-hfield-size:
 
 :at:`size`: :at-val:`real(4), required`
-   .. figure:: images/modeling/peaks.png
+   .. figure:: images/XMLreference/peaks.png
       :width: 350px
       :align: right
 
@@ -2839,23 +2840,7 @@ defined. Its body name is automatically defined as "world".
 .. _body-pos:
 
 :at:`pos`: :at-val:`real(3), optional`
-   The 3D position of the body frame, in local or global coordinates as determined by the coordinate attribute of
-   :ref:`compiler <compiler>`. Recall the earlier discussion of local and global coordinates in :ref:`Coordinate frames
-   <CFrame>`. In local coordinates, if the body position is left undefined it defaults to (0,0,0). In global
-   coordinates, an undefined body position is inferred by the compiler through the following steps:
-
-   #. If the inertial frame is not defined via the :ref:`inertial <body-inertial>` element, it is inferred from the
-      geoms attached to the body. If there are no geoms, the inertial frame remains undefined. This step is applied in
-      both local and global coordinates.
-   #. If both the body frame and the inertial frame are undefined, a compile error is generated.
-   #. If one of these two frames is defined and the other is not, the defined one is copied into the undefined one. At
-      this point both frames are defined, in global coordinates.
-   #. The inertial frame as well as all elements defined in the body are converted to local coordinates, relative to the
-      body frame.
-
-   Note that whether a frame is defined or not depends on its pos attribute, which is in the special undefined state by
-   default. Orientation cannot be used to make this determination because it has an internal default (the unit
-   quaternion).
+   The 3D position of the body frame, in the parent coordinate frame. If undefined it defaults to (0,0,0).
 
 .. _body-quat:
 
@@ -2868,12 +2853,7 @@ defined. Its body name is automatically defined as "world".
 .. _body-euler:
 
 :at:`quat`, :at:`axisangle`, :at:`xyaxes`, :at:`zaxis`, :at:`euler`
-   See :ref:`COrientation`. Similar to position, the orientation specified here is
-   interpreted in either local or global coordinates as determined by the coordinate attribute of
-   :ref:`compiler <compiler>`. Unlike position which is required in local coordinates, the orientation defaults to the
-   unit quaternion, thus specifying it is optional even in local coordinates. If the body frame was copied from the body
-   inertial frame per the above rules, the copy operation applies to both position and orientation, and the setting of
-   the orientation-related attributes is ignored.
+   See :ref:`COrientation`.
 
 .. _body-gravcomp:
 
@@ -3021,8 +3001,7 @@ unit quaternions.
 .. _body-joint-pos:
 
 :at:`pos`: :at-val:`real(3), "0 0 0"`
-   Position of the joint, specified in local or global coordinates as determined by the coordinate attribute of
-   :ref:`compiler <compiler>`. For free joints this attribute is ignored.
+   Position of the joint, specified in the frame of the parent body. For free joints this attribute is ignored.
 
 .. _body-joint-axis:
 
@@ -3423,19 +3402,26 @@ helps clarify the role of bodies and geoms in MuJoCo.
 .. _body-geom-fromto:
 
 :at:`fromto`: :at-val:`real(6), optional`
-   This attribute can only be used with capsule, cylinder, ellipsoid and box geoms. It provides an alternative
+   .. figure:: images/XMLreference/fromto.png
+      :width: 350px
+      :align: right
+
+   This attribute can only be used with capsule, box, cylinder and ellipsoid geoms. It provides an alternative
    specification of the geom length as well as the frame position and orientation. The six numbers are the 3D
    coordinates of one point followed by the 3D coordinates of another point. The elongated part of the geom connects
-   these two points, with the +Z axis of the geom's frame oriented from the first towards the second point. The frame
-   orientation is obtained with the same procedure as the zaxis attribute described in :ref:`Frame orientations
-   <COrientation>`. The frame position is in the middle between the two points. If this attribute is specified, the
-   remaining position and orientation-related attributes are ignored.
+   these two points, with the +Z axis of the geom's frame oriented from the first towards the second point, while in the
+   perpendicular direction, the geom sizes are both equal to the first value of the :at:`size` attribute. The frame
+   orientation is obtained with the same procedure as the :at:`zaxis` attribute described in :ref:`Frame orientations
+   <COrientation>`. The frame position is in the middle between the end points. If this attribute is specified, the
+   remaining position and orientation-related attributes are ignored. The image on the right demonstrates use of
+   :at:`fromto` with the four supported geoms, using identical Z values. The model is `here <_static/fromto.xml>`__.
+   Note that the :at:`fromto` semantics of *capsule* are unique: the two end points specify the segement around which
+   the radius defines the capsule surface.
 
 .. _body-geom-pos:
 
 :at:`pos`: :at-val:`real(3), "0 0 0"`
-   Position of the geom frame, in local or global coordinates as determined by the coordinate attribute of
-   :ref:`compiler <compiler>`.
+   Position of the geom, specified in the frame of the parent body.
 
 .. _body-geom-quat:
 
@@ -4416,9 +4402,8 @@ geoms volumes of either body. This constraint can be used to define ball joints 
    kinematics; the constraint solver pushes these points towards each other. In the MJCF model however only one point is
    given. We assume that the equality constraint is exactly satisfied in the configuration in which the model is defined
    (this applies to all other constraint types as well). The compiler uses the single anchor specified in the MJCF model
-   to compute the two body-relative anchor points in mjModel. If the MJCF model is in global coordinates, as determined
-   by the coordinate attribute of :ref:`compiler <compiler>`, the anchor is specified in global coordinates. Otherwise
-   the anchor is specified relative to the local coordinate frame of the *first* body.
+   to compute the two body-relative anchor points in mjModel. Specified relative to the local coordinate frame of
+   the *first* body.
 
 
 .. _equality-weld:
@@ -4585,7 +4570,7 @@ can also represent different forms of mechanical coupling.
 :el-prefix:`tendon/` |-| **spatial** (*)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. figure:: images/modeling/tendon.png
+.. figure:: images/XMLreference/tendon.png
    :width: 400px
    :align: right
 

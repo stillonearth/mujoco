@@ -3,8 +3,9 @@ Python Bindings
 ===============
 
 Starting with version 2.1.2, MuJoCo comes with native Python bindings that are developed in C++ using
-`pybind11 <https://pybind11.readthedocs.io/>`__. Unlike previous Python bindings, these are officially supported by the
-MuJoCo development team and will be kept up-to-date with the latest developments in MuJoCo itself.
+`pybind11 <https://pybind11.readthedocs.io/>`__. The Python API is consistent with the underlying C API. This leads to
+some non-Pythonic code structure (e.g. order of function arguments), but it has the benefit that the
+:doc:`API documentation<APIreference/index>` is applicable to both languages.
 
 The Python bindings are distributed as the ``mujoco`` package on `PyPI <https://pypi.org/project/mujoco>`__. These are
 low-level bindings that are meant to give as close to a direct access to the MuJoCo library as possible. However, in
@@ -15,9 +16,11 @@ DeepMind’s `dm_control <https://github.com/deepmind/dm_control>`__ reinforceme
 version 1.0.0 implemented its own MuJoCo bindings based on ``ctypes``) has been updated to depend on the ``mujoco``
 package and continues to be supported by DeepMind. Changes in dm_control should be largely transparent to users of
 previous versions, however code that depended directly on its low-level API may need to be updated. Consult the
-`migration guide <https://github.com/deepmind/dm_control/blob/master/migration_guide_1.0.md>`__ for detail.
+`migration guide <https://github.com/deepmind/dm_control/blob/main/migration_guide_1.0.md>`__ for detail.
 
 For mujoco-py users, we include :ref:`notes <PyMjpy_migration>` below to aid migration.
+
+.. _PyNotebook:
 
 Tutorial notebook
 =================
@@ -26,6 +29,8 @@ A MuJoCo tutorial using the Python bindings is available here: |colab|
 
 .. |colab| image:: https://colab.research.google.com/assets/colab-badge.svg
            :target: https://colab.research.google.com/github/deepmind/mujoco/blob/main/python/tutorial.ipynb
+
+.. _PyInstallation:
 
 Installation
 ============
@@ -39,104 +44,118 @@ The recommended way to install this package is via `PyPI <https://pypi.org/proje
 A copy of the MuJoCo library is provided as part of the package and does **not** need to be downloaded or installed
 separately.
 
-Building from source
---------------------
-
-.. note::
-    Building from source is only necessary if you are modifying the
-    Python bindings (or are trying to run on exceptionally old Linux systems).
-    If that's not the case, then we recommend installing the prebuilt binaries
-    from PyPI.
-
-1. Make sure you have CMake and a C++17 compiler installed.
-
-2. Download the `latest binary release <https://github.com/deepmind/mujoco/releases>`__
-   from GitHub. On macOS, the download corresponds to a DMG file from which you
-   can drag ``MuJoCo.app`` into your ``/Applications`` folder.
-
-3. Clone the entire ``mujoco`` repository from GitHub and ``cd`` into the python
-   directory:
-
-   .. code-block:: shell
-
-      git clone https://github.com/deepmind/mujoco.git
-      cd mujoco/python
-
-4. Create a virtual environment:
-
-   .. code-block:: shell
-
-      python3 -m venv /tmp/mujoco
-      source /tmp/mujoco/bin/activate
-
-5. Generate a `source distribution <https://packaging.python.org/en/latest/glossary/#term-Source-Distribution-or-sdist>`__
-   tarball with the ``make_sdist.sh`` script.
-
-   .. code-block:: shell
-
-      cd python
-      bash make_sdist.sh
-
-   The ``make_sdist.sh`` script generates additional C++ header files that are
-   needed to build the bindings, and also pulls in required files from elsewhere
-   in the repository outside the ``python`` directory into the sdist. Upon
-   completion, the script will create a ``dist`` directory with a
-   ``mujoco-x.y.z.tar.gz`` file (where ``x.y.z`` is the version number).
-
-6. Use the generated source distribution to build and install the bindings.
-   You'll need to specify the path to the MuJoCo library you downloaded earlier
-   in the ``MUJOCO_PATH`` environment variable.
-
-   .. note::
-      For macOS, this can be the path to a directory that contains the
-      ``mujoco.framework``. In particular, you can set
-      ``MUJOCO_PATH=/Applications/MuJoCo.app`` if you installed MuJoCo as
-      suggested in step 1.
-
-   .. code-block:: shell
-
-      cd dist
-      MUJOCO_PATH=/PATH/TO/MUJOCO pip install mujoco-x.y.z.tar.gz
-
-The Python bindings should now be installed! To check that they've been
-successfully installed, ``cd`` outside of the ``mujoco`` directory and run
-``python -c "import mujoco"``.
-
-As a reference, a working build configuration can be found in MuJoCo's
-[continuous integration setup](https://github.com/deepmind/mujoco/blob/main/.github/workflows/build.yml) on GitHub.
-
 .. _PyViewer:
 
 Interactive viewer
 ==================
 
-An interactive GUI viewer is available as part of the Python package. (This is the same viewer as the ``simulate``
-application that ships with the MuJoCo binary releases.)
+An interactive GUI viewer is provided as part of the Python package in the ``mujoco.viewer`` module. It is based on the
+same codebase as the :ref:`simulate<saSimulate>` application that ships with the MuJoCo binary releases. Three distinct
+use cases are supported:
 
-Three distinct use cases are supported:
+.. _PyViewerApp:
 
-#. Launching as a standalone application:
+Standalone application
+----------------------
 
-   - ``python -m mujoco.viewer`` launches an empty visualization session, where a model can be loaded by drag-and-drop.
-   - ``python -m mujoco.viewer --mjcf=/path/to/some/mjcf.xml`` launches a visualization session for the specified
-     model file.
+- ``python -m mujoco.viewer`` launches an empty visualization session, where a model can be loaded by drag-and-drop.
+- ``python -m mujoco.viewer --mjcf=/path/to/some/mjcf.xml`` launches a visualization session for the specified
+  model file.
 
-#. Launching from a Python program/script -- import the module via ``from mujoco import viewer`` and launch the GUI
-   using one of the following invocations:
+.. _PyViewerManaged:
 
-   - ``viewer.launch()`` launches an empty visualization session, where a model can be loaded by drag-and-drop.
-   - ``viewer.launch(model)`` launches a visualization session for the given ``mjModel`` where the visualizer
-     internally creates its own instance of ``mjData``
-   - ``viewer.launch(model, data)`` is the same as above, except that the visualizer operates directly on the given
-     ``mjData`` instance -- upon exit the ``data`` object will have been modified.
+Managed viewer
+--------------
 
-#. Launching from an interactive Python session (aka REPL): when working interactively either in a ``python`` or
-   ``ipython`` shell, the visualizer can be launched in a "passive" mode via ``viewer.launch_repl(model, data)``, where
-   the user remains in full control of modifying or stepping the physics. In this mode, the user can interact with the
-   visualizer using the mouse and keyboard as usual, however the physics will be frozen unless the user explicitly calls
-   ``mj_step`` (or perform any other modification of the ``mjData`` or ``mjModel``) in the REPL terminal. Note that since
-   the visualizer does not modify ``mjData`` in this mode, mouse-drag perturbations will not work unless the user
-   explicitly handles incoming GUI perturbation events in the REPL session.
+Called from a Python program/script, through the function ``viewer.launch``. This function *blocks user code* to
+support precise timing of the physics loop. This mode should be used if user code is implemented as
+:ref:`engine plugins<exPlugin>` or :ref:`physics callbacks<glPhysics>`, and is called by MuJoCo during :ref:`mj_step`.
+
+- ``viewer.launch()`` launches an empty visualization session, where a model can be loaded by drag-and-drop.
+- ``viewer.launch(model)`` launches a visualization session for the given ``mjModel`` where the visualizer
+  internally creates its own instance of ``mjData``
+- ``viewer.launch(model, data)`` is the same as above, except that the visualizer operates directly on the given
+  ``mjData`` instance -- upon exit the ``data`` object will have been modified.
+
+.. _PyViewerPassive:
+
+Passive viewer
+--------------
+
+By calling ``viewer.launch_passive(model, data)``. This function *does not block*, allowing user code to continue
+execution. In this mode, the user's script is responsible for timing and advancing the physics state, and mouse-drag
+perturbations will not work unless the user explicitly synchronizes incoming events.
+
+.. warning::
+  On MacOS, ``launch_passive`` requires that the user script is executed via a special ``mjpython`` launcher.
+  The ``mjpython`` command is installed as part of the ``mujoco`` package, and can be used as a drop-in replacement
+  for the usual ``python`` command and supports an identical set of command line flags and arguments. For example,
+  a script can be executed via ``mjpython my_script.py``, and an IPython shell can be launched via
+  ``mjpython -m IPython``.
+
+The ``launch_passive`` function returns a handle which can be used to interact with the viewer. It has the following
+attributes:
+
+- ``scn``, ``cam``, ``opt``, and ``pert`` properties: correspond to :ref:`mjvScene`, :ref:`mjvCamera`,
+  :ref:`mjvOption`, and :ref:`mjvPerturb` structs, respectively.
+
+- ``lock()``: provides a mutex lock for the viewer as a context manager. Since the viewer operates its own
+  thread, user code must ensure that it is holding the viewer lock before modifying any physics or visualization
+  state. These include the ``mjModel`` and ``mjData`` instance passed to ``launch_passive``, and also the ``scn``,
+  ``cam``, ``opt``, and ``pert`` properties of the viewer handle.
+
+- ``sync()``: synchronizes state between ``mjModel``, ``mjData``, and GUI user inputs since the previous call to
+  ``sync``. In order to allow user scripts to make arbitrary modifications to ``mjModel`` and ``mjData`` without
+  needing to hold the viewer lock, the passive viewer does not access or modify these structs outside of ``sync``
+  calls.
+
+  User scripts must call ``sync`` in order for the viewer to reflect physics state changes. The ``sync`` function
+  also transfers user inputs from the GUI back into ``mjOption`` (inside ``mjModel``) and ``mjData``, including
+  enable/disable flags, control inputs, and mouse perturbations.
+
+- ``close()``: programmatically closes the viewer window. This method can be safely called without locking.
+
+- ``is_running()``: returns ``True`` if the viewer window is running and ``False`` if it is closed.
+  This method can be safely called without locking.
+
+The viewer handle can also be used as a context manager which calls ``close()`` automatically upon exit. A minimal
+example of a user script that uses ``launch_passive`` might look like the following. (Note that example is a simple
+illustrative example that does **not** necessarily keep the physics ticking at the correct wallclock rate.)
+
+.. code-block:: python
+
+  import time
+
+  import mujoco
+  import mujoco.viewer
+
+  m = mujoco.MjModel.from_xml_path('/path/to/mjcf.xml')
+  d = mujoco.MjData(m)
+
+  with mujoco.viewer.launch_passive(m, d) as viewer:
+    # Close the viewer automatically after 30 wall-seconds.
+    start = time.time()
+    while viewer.is_running() and time.time() - start < 30:
+      step_start = time.time()
+
+      # mj_step can be replaced with code that also evaluates
+      # a policy and applies a control signal before stepping the physics.
+      mujoco.mj_step(m, d)
+
+      # Example modification of a viewer option: toggle contact points every two seconds.
+      with viewer.lock():
+        viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = int(d.time % 2)
+
+      # Pick up changes to the physics state, apply perturbations, update options from GUI.
+      viewer.sync()
+
+      # Rudimentary time keeping, will drift relative to wall clock.
+      time_until_next_step = m.opt.timestep - (time.time() - step_start)
+      if time_until_next_step > 0:
+        time.sleep(time_until_next_step)
+
+
+.. _PyUsage:
 
 Basic usage
 ===========
@@ -149,9 +168,15 @@ available directly from the top-level ``mujoco`` module.
 Structs
 -------
 
-MuJoCo data structures are exposed as Python classes. In order to conform to
-`PEP 8 <https://peps.python.org/pep-0008/>`__ naming guidelines, struct names begin with a capital letter, for example
-``mjData`` becomes ``mujoco.MjData`` in Python.
+The bindings include Python classes that expose MuJoCo data structures. For maximum performance, these classes provide
+access to the raw memory used by MuJoCo without copying or buffering. This means that some MuJoCo functions (e.g.,
+:ref:`mj_step`) change the content of fields *in place*. The user is therefore advised to create copies where required.
+For example, when logging the position of a body, one could write
+``positions.append(data.body('my_body').xpos.copy())``. Without the ``.copy()``, the list would contain identical
+elements, all pointing to the most recent value.
+
+In order to conform to `PEP 8 <https://peps.python.org/pep-0008/>`__
+naming guidelines, struct names begin with a capital letter, for example ``mjData`` becomes ``mujoco.MjData`` in Python.
 
 All structs other than ``mjModel`` have constructors in Python. For structs that have an ``mj_defaultFoo``-style
 initialization function, the Python constructor calls the default initializer automatically, so for example
@@ -165,10 +190,12 @@ used, the corresponding deallocation function ``mj_freeFoo/mj_deleteFoo`` is aut
 object is deleted. The user does not need to manually free resources.
 
 The ``mujoco.MjModel`` class does not a have Python constructor. Instead, we provide three static factory functions
-that create a new ``mjModel`` instance: ``mujoco.MjModel.from_xml_string``, ``mujoco.MjModel.from_xml_path``, and
+that create a new :ref:`mjModel` instance: ``mujoco.MjModel.from_xml_string``, ``mujoco.MjModel.from_xml_path``, and
 ``mujoco.MjModel.from_binary_path``. The first function accepts a model XML as a string, while the latter two
 functions accept the path to either an XML or MJB model file. All three functions optionally accept a Python
 dictionary which is converted into a MuJoCo :ref:`Virtualfilesystem` for use during model compilation.
+
+.. _PyFunctions:
 
 Functions
 ---------
@@ -207,11 +234,15 @@ duration of the MuJoCo C function itself, and not during the execution of any ot
       for _ in range(20):
         mj_step(model, data)
 
+.. _PyEnums:
+
 Enums and constants
 -------------------
 
 MuJoCo enums are available as ``mujoco.mjtEnumType.ENUM_VALUE``, for example ``mujoco.mjtObj.mjOBJ_SITE``. MuJoCo
 constants are available with the same name directly under the ``mujoco`` module, for example ``mujoco.mjVISSTRING``.
+
+.. _PyExample:
 
 Minimal example
 ---------------
@@ -306,6 +337,8 @@ aliases defined in the Python API.
 - ``tuple``
 - ``key`` or ``keyframe``
 
+.. _PyRender:
+
 Rendering
 ---------
 
@@ -323,6 +356,8 @@ user's responsibility to ensure that no further rendering calls are made on the 
 Once the context is created, users can follow MuJoCo's standard rendering, for example as documented in the
 :ref:`Visualization` section.
 
+.. _PyError:
+
 Error handling
 --------------
 
@@ -336,6 +371,8 @@ The Python bindings utilizes longjmp to allow it to convert irrecoverable MuJoCo
 ``mujoco.FatalError`` that can be caught and processed in the usual Pythonic way. Furthermore, it installs its error
 callback in a thread-local manner using a currently private API, thus allowing for concurrent calls into MuJoCo from
 multiple threads.
+
+.. _PyCallbacks:
 
 Callbacks
 ---------
@@ -358,17 +395,19 @@ Alternatively, if a callback is implemented in a native dynamic library, users c
 it to ``mujoco.set_mjcb_foo``. The bindings will then retrieve the underlying function pointer and assign it directly to
 the raw callback pointer, and the GIL will **not** be acquired each time the callback is entered.
 
-Code Sample: open-loop rollout
-==============================
+.. _PySample:
+
+Open-loop rollouts
+==================
 
 We include a code sample showing how to add additional C/C++ functionality, exposed as a Python module via pybind11. The
 sample, implemented in ``rollout.cc`` and wrapped in ``rollout.py``, implements a common use case where tight loops
 implemented outside of Python are beneficial: rolling out a trajectory (i.e., calling ``mj_step()`` in a loop), given an
 intial state and sequence of controls, and returning subsequent states and sensor values. The canonical usage form is
 
-  .. code-block:: python
+.. code-block:: python
 
-     state, sensordata = rollout.rollout(model, data, initial_state, ctrl)
+   state, sensordata = rollout.rollout(model, data, initial_state, ctrl)
 
 ``initial_state`` is a ``nstate x nqva`` array, with ``nstate`` initial states of length ``nqva``, where ``nqva =
 model.nq + model.nv + model.na`` is the size of the full MuJoCo mechanical state: positions (``data.qpos``), velocities
@@ -381,12 +420,14 @@ all inputs including ``time`` and ``qacc_warmstart`` are set to default values, 
 (``qfrc_applied``, ``xfrc_applied`` and ``mocap_{pos,quat}``). These can also be optionally set by the user.
 
 Since the Global Interpreter Lock can be released, this function can be efficiently threaded using Python threads. See
-the ``test_threading`` function in ``rollout_test.py`` for an example of threaded operation.
+the ``test_threading`` function in
+`rollout_test.py <https://github.com/deepmind/mujoco/blob/main/python/mujoco/rollout_test.py>`_ for an example of
+threaded operation.
 
 .. _PyMjpy_migration:
 
-Migration Notes for mujoco-py
-=============================
+Migration from mujoco-py
+========================
 
 In mujoco-py, the main entry point is the `MjSim <https://github.com/openai/mujoco-py/blob/master/mujoco_py/mjsim.pyx>`_
 class.  Users construct a stateful ``MjSim`` instance from an MJCF model (similar to ``dm_control.Physics``), and this
@@ -398,48 +439,107 @@ While a complete survey of mujoco-py is beyond the scope of this document, we of
 non-exhaustive list of specific mujoco-py features:
 
 ``mujoco_py.load_model_from_xml(bstring)``
-------------------------------------------
-
-This factory function constructs a stateful ``MjSim`` instance.  When using ``mujoco``, the user should call the factory
-function ``mujoco.MjModel.from_xml_*`` as described :ref:`above <PyStructs>`. The user is then responsible for holding
-the resulting ``MjModel`` struct instance and explicitly generating the corresponding ``MjData`` by calling
-``mujoco.MjData(model)``.
+   This factory function constructs a stateful ``MjSim`` instance. When using ``mujoco``, the user should call the
+   factory function ``mujoco.MjModel.from_xml_*`` as described :ref:`above <PyStructs>`. The user is then responsible
+   for holding the resulting ``MjModel`` struct instance and explicitly generating the corresponding ``MjData`` by
+   calling ``mujoco.MjData(model)``.
 
 ``sim.reset()``, ``sim.forward()``, ``sim.step()``
---------------------------------------------------
-
-Here as above, ``mujoco`` users needs to call the underlying library functions, passing instances of ``MjModel`` and
-``MjData``: :ref:`mujoco.mj_resetData(model, data) <mj_resetData>`, :ref:`mujoco.mj_forward(model, data) <mj_forward>`,
-and :ref:`mujoco.mj_step(model, data) <mj_step>`.
+   Here as above, ``mujoco`` users needs to call the underlying library functions, passing instances of ``MjModel`` and
+   ``MjData``: :ref:`mujoco.mj_resetData(model, data) <mj_resetData>`, :ref:`mujoco.mj_forward(model, data)
+   <mj_forward>`, and :ref:`mujoco.mj_step(model, data) <mj_step>`.
 
 ``sim.get_state()``, ``sim.set_state(state)``, ``sim.get_flattened_state()``, ``sim.set_state_from_flattened(state)``
----------------------------------------------------------------------------------------------------------------------
-
-The MuJoCo library’s computation is deterministic given a specific input, as explained in the :ref:`Programming section
-<Simulation>`.  mujoco-py implements methods for getting and setting some of the relevant fields (and similarly
-``dm_control.Physics`` offers methods that correspond to the flattened case).  ``mujoco`` do not offer such abstraction,
-and the user is expected to get/set the values of the relevant fields explicitly.
+   The MuJoCo library’s computation is deterministic given a specific input, as explained in the :ref:`Programming
+   section <Simulation>`. mujoco-py implements methods for getting and setting some of the relevant fields (and
+   similarly ``dm_control.Physics`` offers methods that correspond to the flattened case). ``mujoco`` do not offer such
+   abstraction, and the user is expected to get/set the values of the relevant fields explicitly.
 
 ``sim.model.get_joint_qvel_addr(joint_name)``
----------------------------------------------
-
-This is a convenience method in mujoco-py that returns a list of contiguous indices corresponding to this joint. The
-list starts from ``model.jnt_qposadr[joint_index]``, and its length depends on the joint type.  ``mujoco`` doesn't offer
-this functionality, but this list can be easily constructed using ``model.jnt_qposadr[joint_index]`` and ``xrange``.
+   This is a convenience method in mujoco-py that returns a list of contiguous indices corresponding to this joint. The
+   list starts from ``model.jnt_qposadr[joint_index]``, and its length depends on the joint type. ``mujoco`` doesn't
+   offer this functionality, but this list can be easily constructed using ``model.jnt_qposadr[joint_index]`` and
+   ``xrange``.
 
 ``sim.model.*_name2id(name)``
------------------------------
-
-mujoco-py creates dicts in ``MjSim`` that allow for efficient lookup of indices for objects of different types:
-``site_name2id``, ``body_name2id`` etc.  These functions replace the function :ref:`mujoco.mj_name2id(model, type_enum,
-name) <mj_name2id>`.  ``mujoco`` offers a different approach for using entity names – :ref:`named access <PyNamed>`,
-as well as access to the native :ref:`mj_name2id`.
+   mujoco-py creates dicts in ``MjSim`` that allow for efficient lookup of indices for objects of different types:
+   ``site_name2id``, ``body_name2id`` etc. These functions replace the function :ref:`mujoco.mj_name2id(model,
+   type_enum, name) <mj_name2id>`. ``mujoco`` offers a different approach for using entity names – :ref:`named access
+   <PyNamed>`, as well as access to the native :ref:`mj_name2id`.
 
 ``sim.save(fstream, format_name)``
-----------------------------------
+   This is the one context in which the MuJoCo library (and therefore also ``mujoco``) is stateful: it holds a copy in
+   memory of the last XML that was compiled, which is used in :ref:`mujoco.mj_saveLastXML(fname) <mj_saveLastXML>`. Note
+   that mujoco-py’s implementation has a convenient extra feature, whereby the pose (as determined by ``sim.data``’s
+   state) is transformed to a keyframe that’s added to the model before saving.  This extra feature is not currently
+   available in ``mujoco``.
 
-This is the one context in which the MuJoCo library (and therefore also ``mujoco``) is stateful: it holds a copy in
-memory of the last XML that was compiled, which is used in :ref:`mujoco.mj_saveLastXML(fname) <mj_saveLastXML>`. Note
-that mujoco-py’s implementation has a convenient extra feature, whereby the pose (as determined by ``sim.data``’s
-state) is transformed to a keyframe that’s added to the model before saving.  This extra feature is not currently
-available in ``mujoco``.
+
+.. _PyBuild:
+
+Building from source
+====================
+
+.. note::
+    Building from source is only necessary if you are modifying the
+    Python bindings (or are trying to run on exceptionally old Linux systems).
+    If that's not the case, then we recommend installing the prebuilt binaries
+    from PyPI.
+
+1. Make sure you have CMake and a C++17 compiler installed.
+
+2. Download the `latest binary release <https://github.com/deepmind/mujoco/releases>`__
+   from GitHub. On macOS, the download corresponds to a DMG file from which you
+   can drag ``MuJoCo.app`` into your ``/Applications`` folder.
+
+3. Clone the entire ``mujoco`` repository from GitHub and ``cd`` into the python
+   directory:
+
+   .. code-block:: shell
+
+      git clone https://github.com/deepmind/mujoco.git
+      cd mujoco/python
+
+4. Create a virtual environment:
+
+   .. code-block:: shell
+
+      python3 -m venv /tmp/mujoco
+      source /tmp/mujoco/bin/activate
+
+5. Generate a `source distribution <https://packaging.python.org/en/latest/glossary/#term-Source-Distribution-or-sdist>`__
+   tarball with the ``make_sdist.sh`` script.
+
+   .. code-block:: shell
+
+      cd python
+      bash make_sdist.sh
+
+   The ``make_sdist.sh`` script generates additional C++ header files that are
+   needed to build the bindings, and also pulls in required files from elsewhere
+   in the repository outside the ``python`` directory into the sdist. Upon
+   completion, the script will create a ``dist`` directory with a
+   ``mujoco-x.y.z.tar.gz`` file (where ``x.y.z`` is the version number).
+
+6. Use the generated source distribution to build and install the bindings.
+   You'll need to specify the path to the MuJoCo library you downloaded earlier
+   in the ``MUJOCO_PATH`` environment variable.
+
+   .. note::
+      For macOS, this can be the path to a directory that contains the
+      ``mujoco.framework``. In particular, you can set
+      ``MUJOCO_PATH=/Applications/MuJoCo.app`` if you installed MuJoCo as
+      suggested in step 1.
+
+   .. code-block:: shell
+
+      cd dist
+      MUJOCO_PATH=/PATH/TO/MUJOCO pip install mujoco-x.y.z.tar.gz
+
+The Python bindings should now be installed! To check that they've been
+successfully installed, ``cd`` outside of the ``mujoco`` directory and run
+``python -c "import mujoco"``.
+
+.. tip::
+   As a reference, a working build configuration can be found in MuJoCo's
+   `continuous integration setup <https://github.com/deepmind/mujoco/blob/main/.github/workflows/build.yml>`_ on GitHub.
