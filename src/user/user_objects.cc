@@ -2038,91 +2038,11 @@ void mjCHField::LoadCustom(mjResource* resource) {
   memcpy(data, (void*)(pint+2), nrow*ncol*sizeof(float));
 }
 
+
+
 // load elevation data from PNG format
 void mjCHField::LoadPNG(mjResource* resource) {
   return;
-
-}
-
-// compiler
-void mjCHField::Compile(int default_provider) {
-  // check size parameters
-  for (int i=0; i<4; i++)
-    if (size[i]<=0)
-      throw mjCError(this,
-                     "size parameter is not positive in hfield '%s' (id = %d)", name.c_str(), id);
-
-  // remove path from file if necessary
-  if (model->strippath) {
-    file = mjuu_strippath(file);
-  }
-
-  // load from file if specified
-  if (!file.empty()) {
-    // make sure hfield was not already specified manually
-    if (nrow || ncol || data) {
-      throw mjCError(this,
-                     "hfield '%s' (id = %d) specified from file and manually", name.c_str(), id);
-    }
-
-    // make filename
-    string filename = mjuu_makefullname(model->modelfiledir, model->meshdir, file);
-    mjResource* resource = LoadResource(filename, default_provider);
-
-    // load depending on format
-    string ext = mjuu_getext(filename);
-
-    try {
-      if (!strcasecmp(ext.c_str(), ".png")) {
-        LoadPNG(resource);
-      } else {
-        LoadCustom(resource);
-      }
-      mju_closeResource(resource);
-    } catch(mjCError err) {
-      mju_closeResource(resource);
-      throw err;
-    }
-  }
-
-  // make sure hfield was specified (from file or manually)
-  if (nrow<1 || ncol<1 || data==0) {
-    throw mjCError(this, "hfield '%s' (id = %d) not specified", name.c_str(), id);
-  }
-
-  // set elevation data to [0-1] range
-  float emin = 1E+10, emax = -1E+10;
-  for (int i = 0; i<nrow*ncol; i++) {
-    emin = mjMIN(emin, data[i]);
-    emax = mjMAX(emax, data[i]);
-  }
-  if (emin>emax) {
-    throw mjCError(this, "invalid data range in hfield '%s'", file.c_str());
-  }
-  for (int i=0; i<nrow*ncol; i++) {
-    data[i] -= emin;
-    if (emax-emin>mjMINVAL) {
-      data[i] /= (emax - emin);
-    }
-  if (!w || !h) {
-    throw mjCError(this, "Zero dimension in PNG hfield '%s' (id = %d)", resource->name, id);
-  }
-
-  // allocate
-  data = (float*) mju_malloc(w*h*sizeof(float));
-  if (!data) {
-    throw mjCError(this, "could not allocate buffers in hfield");
-  }
-
-  // assign and copy
-  ncol = w;
-  nrow = h;
-  for (int c=0; c<ncol; c++)
-    for (int r=0; r<nrow; r++) {
-      data[c+(nrow-1-r)*ncol] = (float)image[c+r*ncol];
-    }
-  image.clear();
->>>>>>> a8d202a0c284586f99ced8c1dab80e9aef4dd39f
 }
 
 
